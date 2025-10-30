@@ -362,55 +362,72 @@
             );
         }
 
-         /* ---- ✅ 改良版ログ機能 ---- */
-            let logData = [];
+    let logData = [];
 
-            function logCurrentPosition() {
-                const timestamp = new Date().toISOString();
+    function logCurrentPosition() {
+        const logBtn = document.getElementById("logBtn");
+        logBtn.style.backgroundColor = "#28a745"; // 押したとき色変化
 
-                if (!imuLat || !imuLon) {
-                    alert("IMU位置が未取得です。少し待ってからもう一度。");
-                    return;
-                }
+        setTimeout(() => logBtn.style.backgroundColor = "#007BFF", 400); // 0.4秒後戻す
 
-                const spot = spots[currentIndex] || { name: "不明", lat: 0, lon: 0 };
-                const gpsAvailable = typeof gpsLat !== "undefined" && gpsLat !== null;
-                const distance = getDistance(imuLat, imuLon, spot.lat, spot.lon).toFixed(2);
+        if (!navigator.geolocation) {
+            alert("位置情報が利用できません");
+            return;
+        }
 
-                const entry = {
-                    time: timestamp,
-                    GPS_lat: gpsAvailable ? gpsLat : "",
-                    GPS_lon: gpsAvailable ? gpsLon : "",
-                    IMU_lat: imuLat,
-                    IMU_lon: imuLon,
-                    nextSpot: spot.name,
-                    distance: distance
-                };
+        navigator.geolocation.getCurrentPosition(pos => {
+            const lat = pos.coords.latitude;
+            const lon = pos.coords.longitude;
+            const timestamp = new Date().toISOString();
 
-                logData.push(entry);
-
-                info.innerText += `\n📍ログ記録 ${timestamp}\nGPS(${gpsLat?.toFixed(6)},${gpsLon?.toFixed(6)})\nIMU(${imuLat.toFixed(6)},${imuLon.toFixed(6)})`;
-                console.log("Log Entry:", entry);
+            if (currentIndex >= spots.length) {
+                alert("すべてのスポットを通過しました");
+                return;
             }
 
-            function downloadCSV() {
-                if (logData.length === 0) {
-                    alert("ログがありません");
-                    return;
-                }
+            const spot = spots[currentIndex];
+            const distance = getDistance(lat, lon, spot.lat, spot.lon).toFixed(2);
 
-                let csv = "time,GPS_lat,GPS_lon,IMU_lat,IMU_lon,nextSpot,distance(m)\n";
-                logData.forEach(e => {
-                    csv += `${e.time},${e.GPS_lat || ""},${e.GPS_lon || ""},${e.IMU_lat},${e.IMU_lon},${e.nextSpot},${e.distance}\n`;
-                });
+            const logEntry = {
+                id: logData.length + 1,
+                time: timestamp,
+                lat: lat,
+                lon: lon,
+                nextSpot: spot.name,
+                distance: distance
+            };
 
-                const blob = new Blob([csv], { type: "text/csv" });
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = "position_log.csv";
-                a.click();
-            }
+            logData.push(logEntry);
 
+            info.innerText =
+                `✅ ログ記録しました（#${logEntry.id}）\n現在地: ${lat.toFixed(6)}, ${lon.toFixed(6)}\n` +
+                `→ 次のスポット: ${spot.name}\n距離: ${distance} m`;
+
+            console.log("Log Entry:", logEntry);
+        }, err => {
+            alert("現在地の取得に失敗しました: " + err.message);
+        }, { enableHighAccuracy: true });
+    }
+
+    function downloadCSV() {
+        if (logData.length === 0) {
+            alert("ログがありません");
+            return;
+        }
+
+        let csv = "id,time,lat,lon,nextSpot,distance(m)\n";
+        logData.forEach(entry => {
+            csv += `${entry.id},${entry.time},${entry.lat},${entry.lon},${entry.nextSpot},${entry.distance}\n`;
+        });
+
+        const blob = new Blob([csv], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `position_log_${new Date().toISOString().replace(/[:.]/g, "-")}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }
         window.onload = () => {
             getQRInitialPosition();
             updatePatternButtonText();
